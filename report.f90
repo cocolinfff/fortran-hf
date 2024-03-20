@@ -19,10 +19,11 @@ end type
 
 type(rods_type) :: rods(1)
 end module type_add
-!!!!!! 有很大问题的
+!!!!!! 有很大问题的F
 ! pin_sc_conn 完全不知道作用，注释掉了,疑似是得到一个换热相关参数chnum
 ! flmesh 流体网格类的实例，只出现了一次，反推不出来定义
 ! ch 疑似是从chnum得到换热系数，返回值似乎是类
+! HFrod->HFrods(type(HFcond),point) 没有实例化
 
 !!!!!! 大概没什么问题的
 ! ihfout 读写通道号，大概取定常数>10即可
