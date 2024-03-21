@@ -27,6 +27,50 @@ module mathcal
         return
     end
 
+    !返回曲线侧的x与y方向分量,方向由对应点指向曲率圆心
+    real function cirlencom(p,x,y,cirx,cirx)
+        !p为需要转化的量的长度，x，y为对应点X,Y坐标，cirx,ciry为曲率圆心坐标
+        implicit none
+        real, intent(in) :: p, x, y, cirx, ciry
+        real dimension(2), intent(out) :: cirlencom !第一列表示x分量，第二列表示y分量
+        real :: radius
+            radius = sqrt( (cirx - x)**2 + (ciry - y)**2 )
+            cirlencom(1) = p * (cirx - x)/radius
+            cirlencom(2) = p * (ciry - y)/radius
+        return 
+    end
+
+    !删除矩阵对应第i行并拼接
+    real function revector(i,vector)
+        implicit none
+        integer, intent(in) :: i
+        real, intent(in) :: vector(:,:) 
+        integer :: row = size(vector,1), col = size(vector,2)
+        real dimension(row - 1,col), intent(out) :: revector
+
+            forall(j = 1 : i - 1 , k = 1 : col)
+                revector(j,k) = vector(j,k)
+            end forall
+
+            forall(j = 1 : row - i , k = 1 : col)
+                revector(i+j-1,k) = vector(i+j,k)
+            end forall
+        return
+    end
+
+    !删除矩阵对应第i行，第j列并拼接矩阵
+    real function remat(i,j,mat)
+        use revector
+        implicit none
+        integer, intent(in) :: i, j 
+        real, intent(in) :: mat(:,:) 
+        integer :: row = size(mat,1), col = size(mat,2)
+        real dimension(row - 1,col - 1), intent(out) :: remat
+            remat = revector(i,mat)
+            remat = transpose(revector(j,transpose(mat)))
+        return
+    end
+
 end module mathcal
 
 module temp2physi_conduction
@@ -46,7 +90,26 @@ module temp2physi_conduction
     real dimension(ele_row) :: Elmo !定义单元弹性模量，ele_row表示单元总数
     real dimension(ele_row) :: poi !定义单元泊松比
     real dimension(2*node_num,2*node_num) :: k_stiffness = 0 !定义整体刚度矩阵，node_num为结点总数
-    real dimension(2*node_num,1) :: force = 0 !定义载荷列向量
+    real dimension(2*node_num,3) :: force !定义结点载荷列向量，第一列为结点载荷，第二列为结点x编号，第三列为结点y编号
+    real dimension(2*node_num,3) :: displacement !定义结点位移列向量,第一列为结点位移，第二列为结点x编号，第三列为结点y编号
+    !example: force = [15.5 1 0] ————X1
+    !                 [  0  0 1] ————Y1
+    !表示结点1在x方向受载荷15.5,在y方向不受载荷,即p1x=15.5,p1y=0
+    !初始化列向量 
+
+        forall(i = 1 : node_num)
+            force(2*i-1,1) = 0
+            force(2*i-1,2) = i
+            force(2*i-1,3) = 0
+            force(2*i,1) = 0
+            force(2*i,2) = 0
+            force(2*i,3) = i
+        end forall
+        displacement = force
+    
+
+    !求解
+    call solutionD()
 
     !Zr与UO2弹性模量关于温度的函数
     real function Elasticmo(T,type)  !Elasticmo单位GPa , T单位K , type表示材料类型
@@ -56,12 +119,12 @@ module temp2physi_conduction
             select case (type)
             !type = 1 ：Zr
             !type = 2 : UO2
-            case (1)
-                Elasticmo = 921 - 4.05e-2*T  
-            case (2)
-                Elasticmo = 233.4 - 2.5476e-2*T 
-            case default
-                write(*,*) "未定义材料"
+                case (1)
+                    Elasticmo = 921 - 4.05e-2*T  
+                case (2)
+                    Elasticmo = 233.4 - 2.5476e-2*T 
+                case default
+                    write(*,*) "未定义材料"
             end select 
         return
     end
@@ -75,14 +138,14 @@ module temp2physi_conduction
             select case (type)
             !type = 1 ：Zr
             !type = 2 : UO2
-            case (1)
-                G = 349 - 1.66e-2*T  !剪切模量，单位GPa
-                E = Elasticmo(T,1)
-                poission = E/2/G - 1
-            case (2)
-                poission = 0.328
-            case default
-                write(*,*) "未定义材料"
+                case (1)
+                    G = 349 - 1.66e-2*T  !剪切模量，单位GPa
+                    E = Elasticmo(T,1)
+                    poission = E/2/G - 1
+                case (2)
+                    poission = 0.328
+                case default
+                    write(*,*) "未定义材料"
             end select 
         return
     end
@@ -107,10 +170,11 @@ module temp2physi_conduction
     !进行刚度矩阵计算，采取四结点四边形有限元计算
      !E为弹性模量，nu为泊松比.node为结点编号、坐标以及边界限制，第一列为结点编号，第二列为x坐标，第三列为y坐标
      !第四列为x方向限制，第五列为y方向限制，取值为0表示固定，1表示自由, 不为0，1的自然数表示对应区域的受外载荷边界
-     !node的形式应该为:1 0.01 0.01 0 0
+     !node的形式应该为:1 0.01 0.01 0 0 
      !                2 0.03 0.03 1 1
      !type为选择平面应力或平面应变的类型
     subroutine stiffness(E,nu,ele,node,type)
+        call material(ele_uo2,ele_row,Elmo,poi)
         implicit none
         real, intent(in) :: E(:),nu(:),ele(:,:),node(:,:)
         real dimension(8,8) :: ele_k_stiffness !单元刚度矩阵
@@ -165,16 +229,16 @@ module temp2physi_conduction
                     select case(type)
                     !type = 1:平面应力
                     !type = 2:平面应变
-                    case(1)
-                        coffA = E(i)/(1-nu(i)**2)
-                        stressmatrix = reshape([1,nu(i),0,nu(i),1,0,0,0,(1-nu(i))/2],[3,3])
-                        stressmatrix = multnM(coffA,stressmatrix)
-                    case(2)
-                        coffA = E(i)/(1+nu(i))/(1-2*nu(i))
-                        stressmatrix = reshape([1-nu(i),nu(i),0,nu(i),1-nu(i),0,0,0,(1-2*nu(i))/2],[3,3])
-                        stressmatrix = multnM(coffA,stressmatrix)
-                    case default
-                        write(*,*) "unknown input"
+                        case(1)
+                            coffA = E(i)/(1-nu(i)**2)
+                            stressmatrix = reshape([1,nu(i),0,nu(i),1,0,0,0,(1-nu(i))/2],[3,3])
+                            stressmatrix = multnM(coffA,stressmatrix)
+                        case(2)
+                            coffA = E(i)/(1+nu(i))/(1-2*nu(i))
+                            stressmatrix = reshape([1-nu(i),nu(i),0,nu(i),1-nu(i),0,0,0,(1-2*nu(i))/2],[3,3])
+                            stressmatrix = multnM(coffA,stressmatrix)
+                        case default
+                            write(*,*) "unknown input"
                     end select
 
                     !利用了高斯积分近似，采取了四个样本点计算积分
@@ -209,19 +273,94 @@ module temp2physi_conduction
 
     end subroutine assemblestiffness
 
-    !创建结点载荷列向量的子程序
-    subroutine load(ele,force)
+    !创建结点载荷,位移列向量与确定边界条件的子程序
+    subroutine load(p,node,force,displacement,cir)
+        call stiffness(Elmo,poi,ele,node,1)
         implicit none
-        real, intent(in) ::ele
-        real, intent(in,out) ::force
-    end subroutine load
+        real, intent(in) :: node(:,:), cir(:,:), p !cir为曲率圆心坐标矩阵，p为外界恒定压力
+        real, intent(in,out) :: force(:,:), displacement(:,:)
+        integer :: nodextype, nodeytype !定义结点x与y方向的边界类型
+        real dimension(2*node_num,3), intent(out) :: tempforce = force, tempdisplacement = displacement !用于计算非固定边界的过渡载荷与位移向量
+        !十字螺旋1/4模型中，其实只有3个圆弧侧，2个对称的正曲率圆弧，1个负曲率圆弧，故cir()可以设为2×2矩阵
+        !cir(:,:) = [cirx1,ciry1] ——————负曲率圆弧的圆心坐标
+        !           [ mcir , 0  ] ——————圆心在x轴上的正曲率圆弧圆心坐标，圆心在y轴上的为[0, mcir]
+        !对结点载荷进行赋值
 
-    !创建结点位移列向量和边界条件的子程序
-    subroutine displacement()
-    end subroutine displacement
+        do i = 1 : node_num
+            nodextype = node(i,4)
+            nodeytype = node(i,5)
+            !nodetype = 0 : 方向固定，同时删去刚度矩阵对应第行与列、过渡载荷和位移列向量的对应行
+            !nodetype = 1 : 方向自由，载荷列向量对应行设为0
+            !nodetype = 2 : 受x方向载荷的结点类型
+            !nodetype = 3 : 受y方向载荷的结点类型
+            !nodetype = 4 : 圆心在x轴上的正曲率圆周侧载荷的结点类型
+            !nodetype = 5 : 圆心在y轴上的正曲率圆周侧载荷的结点类型
+            !nodetype = 6 : 负曲率圆周侧载荷的结点类型
+
+            !判断x方向载荷类型
+            select case(nodextype)
+                case(0)
+                    k_stiffness = remat(2*i-1, 2*i-1, k_stiffness)
+                    tempforce = revector(2*i-1, tempforce)
+                    tempdisplacement = revector(2*i-1, tempdisplacement)
+                case(1,3)
+                    force(2*i-1, 1) = 0
+                case(2)
+                    force(2*i-1, 1) = -p
+                case(4)
+                    force(2*i-1, 1) = cirlencom(p,node(i,2),node(i,3),cir(2,1),cir(2,2))(1)
+                case(5)
+                    force(2*i-1, 1) = cirlencom(p,node(i,2),node(i,3),cir(2,2),cir(2,1))(1)
+                case(6)
+                    force(2*i-1, 1) = cirlencom(-p,node(i,2),node(i,3),cir(1,1),cir(1,2))(1)
+                case default
+                    write(*,*) "未定义载荷类型"
+            end select 
+
+            !判断y方向载荷类型
+            select case(nodeytype)
+                case(0)
+                    k_stiffness = remat(2*i, 2*i, k_stiffness)
+                    tempforce = revector(2*i, tempforce)
+                    tempdisplacement = revector(2*i, tempdisplacement)
+                case(1,2)
+                    force(2*i, 1) = 0
+                case(3)
+                    force(2*i, 1) = -p
+                case(4)
+                    force(2*i, 1) = cirlencom(p,node(i,2),node(i,3),cir(2,1),cir(2,2))(2)
+                case(5)
+                    force(2*i, 1) = cirlencom(p,node(i,2),node(i,3),cir(2,2),cir(2,1))(2)
+                case(6)
+                    force(2*i, 1) = cirlencom(-p,node(i,2),node(i,3),cir(1,1),cir(1,2))(2)
+                case default
+                    write(*,*) "未定义载荷类型"
+            end select             
+
+    end subroutine load
 
     !求解子程序
     subroutine solutionD()
+     !先解出非结点固定坐标的位移向量，最后再把固定位移的结点整合在一起
+        call load(15.5,node,force,displacement,cir)
+        implicit none
+        real intent(in,out) :: tempforce(:,:), force(:,:), tempdisplacement(:,:), displacement(:,:)
+        real intent(in) :: k_stiffness
+        integer :: tempsize
+        tempsize = size(tempdisplacement,1)
+        tempdisplacement(:,1) = matmul(inv(k_stiffness),tempforce(:,1)) !暂时以inv表示矩阵求逆
+        do i = 1 : tempsize
+            if ( tempdisplacement(i,2) /= 0 ) then
+                displacement(2*tempdisplacement(i,2) - 1,1) = tempdisplacement(i,1) !将过渡位移对应编号的x方向的位移赋值给位移向量
+            end if
+
+            if ( tempdisplacement(i,3) /= 0 ) then
+                displacement(2*tempdisplacement(i,2),1) = tempdisplacement(i,1) !将过渡位移对应编号的y方向的位移赋值给位移向量
+            end if
+
+        end do
+    
+    
     end subroutine solutionD
 
 
