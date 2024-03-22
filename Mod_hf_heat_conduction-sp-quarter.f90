@@ -634,7 +634,7 @@ contains
     integer :: zmax,kmax,chnum,isec
     integer :: M,Nfblk1
     integer :: iter
-    real :: dt_heat,rtwfp,timet
+    real :: rtwfp,timet
     real :: htc,htcavg
     real :: tfluid
     real :: hl,havg_ch,favg_ch
@@ -776,7 +776,7 @@ contains
          sumtcd = sumtcd + tcd**ntcp
     enddo         
     
-    dt_heat = 1e8    
+        
     !Time step
     !if (hf_c == 1) then
     !  call Get_time_data(rtwfp=rtwfp)

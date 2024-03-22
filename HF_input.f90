@@ -16,7 +16,7 @@ module input
     integer :: matfuel,matclad                 !material index of fuel and clad
     integer :: itermax=30000
     integer :: N1=20,N2=20,N3=20,N4=20,N5=20,N6=20                      !网格划分参数
-
+    real :: dt_heat = 1e8
     real ::rod_linear_power=42e3
     integer::jmax=1,kmax=1
 
