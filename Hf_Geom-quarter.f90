@@ -11,18 +11,7 @@
 !> @param thick   clad thick [in]/[m] (HCF)
 !> @paarm facnonu Maximum circumferential heat flux factor
         implicit none
-        real :: pitch,roughness
-        real :: dhc,phc,lhc,rhc,dmhc
-        real :: thick
-        real :: facnonu
-        integer :: hf_c,hcf
-        !integer :: TotMeshNum
-        !integer :: FuelMeshNum,CladMeshNum
         
-        !!!!!Helical fuel heat conduction
-        integer :: matfuel,matclad                 !material index of fuel and clad
-        integer :: itermax=30000
-        integer :: N1,N2,N3,N4,N5,N6                      !网格划分参数
         real :: ntcp                                      !Number of thermal conduction path
         logical :: HF_first_iter
         

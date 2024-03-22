@@ -4,23 +4,25 @@
 !!!! out:位移场
 module mathcal
     implicit none
-
+contains
     !定义数与向量的数乘
-    real function multnV(a,V)
+    function multnV(a,V)
         implicit none
         real, intent(in) :: a, V(:)
-        real dimension(size(V)), intent(out) :: multnV 
+        integer :: i
+        real, dimension(size(V)) :: multnV 
         forall(i = 1 : size(V))
             multnV(i) = a*V(i)
         end forall
         return
-    end
+    end function
         
     !定义数与矩阵的数乘
-    real function multnM(a,M)
+    function multnM(a,M)
         implicit none
         real, intent(in) :: a,M(:,:)
-        real dimension(size(M,1) , size(M,2)), intent(out) :: multnM 
+        integer :: i,j
+        real, dimension(size(M,1) , size(M,2)) :: multnM 
         forall(i = 1 : size(M,1) , j = 1 : size(M,2))
             multnM(i,j) = a*M(i,j)
         end forall
@@ -32,7 +34,7 @@ module mathcal
         !p为需要转化的量的长度，x，y为对应点X,Y坐标，cirx,ciry为曲率圆心坐标
         implicit none
         real, intent(in) :: p, x, y, cirx, ciry
-        real dimension(2), intent(out) :: cirlencom !第一列表示x分量，第二列表示y分量
+        real, dimension(2), intent(out) :: cirlencom !第一列表示x分量，第二列表示y分量
         real :: radius
             radius = sqrt( (cirx - x)**2 + (ciry - y)**2 )
             cirlencom(1) = p * (cirx - x)/radius

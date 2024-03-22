@@ -1,0 +1,1 @@
+gfortran main.f90 -c;gfortran .\HF_input.f90 -c;gfortran .\Hf_Geom-quarter.f90 -c;gfortran .\HF_init.f90 -c;gfortran .\Mod_hf_heat_conduction-sp-quarter.f90 -c;gfortran -o main.exe hf_init.o .\Mod_hf_heat_conduction-sp-quarter.o .\Hf_Geom-quarter.o main.o .\HF_input.o;./main.exe
